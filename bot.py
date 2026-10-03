@@ -1,6 +1,8 @@
 import requests
 import json
 import datetime
+import re
+import sys
 
 # Hava durumu çekilecek şehirler (İstediğin kadar şehir ekleyebilirsin)
 sehirler = {
@@ -42,7 +44,7 @@ print("Tüm şehirlerin canlı ve 7 günlük verileri çekiliyor...")
 tum_veriler = {}
 
 for sehir, koord in sehirler.items():
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={koord['lat']}&longitude={koord['lon']}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Europe%2FMoscow"
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={koord['lat']}&longitude={koord['lon']}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Europe%2FIstanbul"
     cevap = requests.get(url)
     
     if cevap.status_code == 200:
@@ -88,6 +90,28 @@ for sehir, koord in sehirler.items():
 # JavaScript ile çalışacak JSON formatına çeviriyoruz
 json_verisi = json.dumps(tum_veriler, ensure_ascii=False)
 zaman = datetime.datetime.now().strftime("%d-%m-%Y %H:%M")
+
+# Atmosfera tasarımını koruyarak yalnızca gömülü hava verisini yenile.
+# Böylece script her çalıştığında yeni arayüz eski şablon tarafından ezilmez.
+try:
+    with open("index.html", "r", encoding="utf-8") as dosya:
+        mevcut_html = dosya.read()
+    guncel_html, degisim = re.subn(
+        r"const havaVerileri\s*=\s*\{.*?\};",
+        f"const havaVerileri = {json_verisi};",
+        mevcut_html,
+        count=1,
+        flags=re.S,
+    )
+    if degisim != 1:
+        raise RuntimeError("index.html içinde hava veri alanı bulunamadı")
+    with open("index.html", "w", encoding="utf-8") as dosya:
+        dosya.write(guncel_html)
+    print("Atmosfera arayüzü korundu; hava verileri güncellendi.")
+    sys.exit(0)
+except FileNotFoundError:
+    # İlk kurulumda aşağıdaki eski oluşturucu yedek olarak kullanılabilir.
+    pass
 
 html_icerik = f"""
 <!DOCTYPE html>
